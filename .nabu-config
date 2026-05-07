@@ -2,7 +2,7 @@
 # Source este archivo: source .nabu-config
 
 # Public NABU API URL (cloudflared tunnel — Daniel actualiza si cambia)
-export NABU_API_URL="https://74ec82f8-d76b-486e-a0bf-ff614b6cd8f8.cfargotunnel.com"
+export NABU_API_URL="https://api.calderon.coffee"
 
 # Supabase para queries directas (opcional, agente puede leer handoffs detallados)
 export SUPABASE_URL="https://dgrgwyrkvnrhlnrifdoj.supabase.co"
