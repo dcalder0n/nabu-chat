@@ -1,0 +1,10 @@
+# NABU API + Supabase config para esta sesión Claude Code
+# Source este archivo: source .nabu-config
+
+# Public NABU API URL (cloudflared tunnel — Daniel actualiza si cambia)
+export NABU_API_URL="https://stating-fine-means-plants.trycloudflare.com"
+
+# Supabase para queries directas
+export SUPABASE_URL="https://dgrgwyrkvnrhlnrifdoj.supabase.co"
+# SUPABASE_SERVICE_ROLE_KEY: pedir a Daniel y agregar local (NO commitear)
+# export SUPABASE_SERVICE_ROLE_KEY="..."
