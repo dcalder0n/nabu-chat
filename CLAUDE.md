@@ -184,10 +184,86 @@ Antes de declarar URGENT, investigá:
 ## Tools que tenés disponibles
 
 ### Bash + curl (NABU API)
-- `POST /api/handoffs` — abrir handoff
+- `POST /api/handoffs` — abrir handoff (acción coordinada, persistente, Layer 17)
 - `GET /api/handoffs?fromAgent=X` — listar handoffs
 - `GET /api/handoffs/:id` — handoff detalle (resumen)
 - `GET /api/handoffs/inbox/:agent` — inbox de un agent
+- `POST /api/agent-invoke` — INVOKE DIRECTO (query rápida, ~5-30s respuesta)
+- `GET /api/agent-invoke/:job_id` — poll status del invoke
+
+### CUÁNDO usar HANDOFF vs INVOKE — diferencia crítica
+
+**HANDOFF (Layer 17, persistente, audit completo):**
+  Usar para ACCIONES coordinadas que requieren trabajo + persistencia + audit:
+    ✓ "necesito una cotización" → cotizador-agent procesa, genera artefacto
+    ✓ "necesito vacaciones" → permisos-rrhh-agent valida + actualiza calendar
+    ✓ "subí mi PDF a Drive" → organizador-agent ejecuta + reporta link
+    ✓ "fel-agent: emite factura para esta venta" → trabajo concreto downstream
+  Tiempo de respuesta: minutos (5+ típicamente, depende cron + workload)
+  Tool: `POST /api/handoffs` con texto Layer 17
+
+**DIRECT INVOKE (rápido, ~5-30s, ephemeral):**
+  Usar para QUERIES INFORMATIVAS que necesitan respuesta del agente target ya:
+    ✓ "preguntale a fel-agent cuántas facturas emitió hoy"
+    ✓ "preguntale a placa-agent qué fleet versions corren MIDI ahora"
+    ✓ "preguntale a payments-agent si BAC reportó settlement de ayer"
+    ✓ "preguntale a kiosk-agent versión APK actual de MIDI 27"
+  Tiempo respuesta: 5-30 segundos
+  Tool: `POST /api/agent-invoke` con prompt natural
+
+REGLA: si la pregunta termina con "?", probablemente es INVOKE.
+       Si es una orden/acción ("hacé X"), es HANDOFF.
+
+### Sintaxis invoke directo
+
+```bash
+# Async (recomendado para no bloquear el chat):
+RESP=$(curl -sf -X POST "${NABU_API_URL}/api/agent-invoke" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" \
+  -d "$(jq -nc \
+    --arg agent "fel-agent" \
+    --arg prompt "Cuántas facturas emitiste hoy? Una sola línea." \
+    --arg caller "alejandra@vencor.com" \
+    '{agent_name:$agent, prompt:$prompt, caller:$caller, async:true}')")
+
+JOB_ID=$(echo "$RESP" | jq -r .job_id)
+
+# Poll status hasta completed
+while true; do
+  STATUS=$(curl -sf -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" \
+    "${NABU_API_URL}/api/agent-invoke/${JOB_ID}" | jq -r .status)
+  if [ "$STATUS" = "completed" ]; then break; fi
+  if [ "$STATUS" = "failed" ] || [ "$STATUS" = "timeout" ]; then break; fi
+  sleep 3
+done
+
+# Read output
+curl -sf -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" \
+  "${NABU_API_URL}/api/agent-invoke/${JOB_ID}" | jq -r .output
+
+# Sync alternative (más simple si esperás <30s):
+curl -sf -X POST "${NABU_API_URL}/api/agent-invoke" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" \
+  -d "$(jq -nc \
+    --arg agent "fel-agent" \
+    --arg prompt "..." \
+    --arg caller "..." \
+    '{agent_name:$agent, prompt:$prompt, caller:$caller, async:false}')"
+# response.output tiene la respuesta directa
+```
+
+### Auth INTERNAL_SVC_TOKEN
+
+Para invoke directo necesitás el token. Está en `.nabu-config`:
+```bash
+source .nabu-config
+echo $INTERNAL_SVC_TOKEN  # debe estar set por Daniel
+```
+
+Si NO está, usá solo handoff (no invoke) y avisale al empleado:
+"Para queries rápidas necesito el token de invoke. Pedile a Daniel que actualice tu .nabu-config."
 
 ### Bash + curl (Supabase REST directo)
 Si necesitás full body de handoff:
