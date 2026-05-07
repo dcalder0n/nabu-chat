@@ -265,6 +265,85 @@ echo $INTERNAL_SVC_TOKEN  # debe estar set por Daniel
 Si NO está, usá solo handoff (no invoke) y avisale al empleado:
 "Para queries rápidas necesito el token de invoke. Pedile a Daniel que actualice tu .nabu-config."
 
+---
+
+## OPCIÓN B — Wait-for-handoff-response (poll automático)
+
+Cuando abrís handoff con acción concreta (cotización, permisos, organize), el
+agente recipient suele MANDAR HANDOFF DE RESPUESTA hacia vos cuando termina.
+
+En lugar de cerrar el chat y que el empleado vuelva después, podés POLL hasta
+que el agent recipient haya procesado y respondido.
+
+### Patrón: send + wait
+
+```bash
+# 1. Mandar handoff
+HANDOFF_RESP=$(curl -sf -X POST "${NABU_API_URL}/api/handoffs" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -nc --arg t "$LAYER17_TEXT" --arg a "nabu-master" '{text:$t, actor:$a}')")
+
+HANDOFF_ID=$(echo "$HANDOFF_RESP" | jq -r .handoffId)
+echo "Handoff opened: $HANDOFF_ID — esperando respuesta..."
+
+# 2. Poll cada 10s hasta routing complete o timeout 5 min
+START_TS=$(date +%s)
+TIMEOUT=300  # 5 min max espera
+while true; do
+  ELAPSED=$(($(date +%s) - START_TS))
+  if [ $ELAPSED -gt $TIMEOUT ]; then
+    echo "Timeout esperando respuesta. Handoff sigue pendiente; podés consultar después."
+    break
+  fi
+  
+  STATUS=$(curl -sf "${NABU_API_URL}/api/handoffs?fromAgent=nabu-master&limit=20" | \
+    jq -r --arg id "$HANDOFF_ID" '.handoffs[] | select(.id == $id) | .routingStatus')
+  
+  if [ "$STATUS" = "complete" ] || [ "$STATUS" = "failed" ]; then
+    break
+  fi
+  
+  sleep 10
+done
+
+# 3. Buscar respuesta del agent recipient (handoff que él te mandó back)
+# Filter: toAgents=[nabu-master] AND fromAgent=<recipient> AND created_after START
+curl -sf "${NABU_API_URL}/api/handoffs?fromAgent=<recipient>&limit=5" | \
+  jq -r '.handoffs[] | select(.subject | contains("RESPUESTA"))' | head -1
+```
+
+### Cuándo usar B vs A
+
+  - DIRECT INVOKE (A): query rápida, NO requiere acción persistente
+                       Ej: "qué versión APK corre MIDI 27?" → spawn agent → answer
+                       Tiempo: 5-30s
+  
+  - HANDOFF + POLL (B): acción que requiere trabajo + audit trail
+                       Ej: "generame cotización indriver flotilla"
+                       Tiempo: 1-5 min (depende complejidad)
+                       Genera artefacto + handoff respuesta para audit
+
+### Warning UX
+
+Mientras hacés polling, mantén al empleado informado:
+  "Esperando respuesta cotizador-agent... (45s elapsed)"
+  
+Si pasa 2 min sin respuesta:
+  "Cotización está tomando más de lo esperado. ¿Querés esperar o consultas después?"
+
+NO bloquees al empleado más de 5 min en silencio. Es mala UX.
+
+---
+
+## OPCIÓN C — Real-time agentes persistent (V2, ROADMAP)
+
+Cuando NABU API esté en Cloud Run + agents corran como daemons listening 
+Supabase realtime, no necesitarás poll ni autowake cron. Handoff llega → 
+agent procesa instantáneo → respuesta en <5s SIEMPRE.
+
+Status: planeado para V2 Tier C (post Sprint 1 NABU API → Cloud Run).
+No tu preocupación HOY como nabu-master — usá A o B.
+
 ### Bash + curl (Supabase REST directo)
 Si necesitás full body de handoff:
 ```bash
