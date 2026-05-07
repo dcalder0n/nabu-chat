@@ -2,7 +2,7 @@
 # Source este archivo: source .nabu-config
 
 # Public NABU API URL (cloudflared tunnel — Daniel actualiza si cambia)
-export NABU_API_URL="https://stating-fine-means-plants.trycloudflare.com"
+export NABU_API_URL="https://challenging-node-votes-coding.trycloudflare.com"
 
 # Supabase para queries directas
 export SUPABASE_URL="https://dgrgwyrkvnrhlnrifdoj.supabase.co"
