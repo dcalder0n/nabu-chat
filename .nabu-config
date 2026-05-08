@@ -1,14 +1,14 @@
-# NABU API + Supabase config para esta sesión Claude Code
-# Source este archivo: source .nabu-config
+# NABU CLI config — auto-loaded por ~/nabu-chat/nabu wrapper
+# NO edites NABU_API_URL / SUPABASE_URL — son fijas del ecosistema NABU.
+# SÍ tenés que pegar 2 credenciales que Daniel te pasa privado.
 
-# Public NABU API URL (cloudflared tunnel — Daniel actualiza si cambia)
+# === FIJAS — no tocar ===
 export NABU_API_URL="https://api.calderon.coffee"
-
-# Supabase para queries directas (opcional, agente puede leer handoffs detallados)
 export SUPABASE_URL="https://dgrgwyrkvnrhlnrifdoj.supabase.co"
-# SUPABASE_SERVICE_ROLE_KEY: pedir a Daniel y agregar local (NO commitear)
-# export SUPABASE_SERVICE_ROLE_KEY="..."
 
-# Internal token para invoke directo de agentes (POST /api/agent-invoke)
-# Pedir a Daniel — token rota; vive en GCP Secret Manager (internal-svc-token)
+# === TUYAS — Daniel te las pasa por WhatsApp privado ===
+# Anthropic API key (Claude Code la usa, NO necesitás subscripción Pro/Max):
+# export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Internal token para invoke directo de agentes (POST /api/agent-invoke):
 # export INTERNAL_SVC_TOKEN="..."

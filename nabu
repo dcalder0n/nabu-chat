@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# ~/nabu-chat/nabu — wrapper que carga .nabu-config + lanza Claude Code
+#
+# Uso: ./nabu  (o ~/nabu-chat/nabu desde cualquier lado)
+#
+# Auto-carga ANTHROPIC_API_KEY + NABU_API_URL + INTERNAL_SVC_TOKEN antes de
+# arrancar Claude. Empleado NO necesita configurar nada en su shell.
+
+set -e
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
+# Verificar config existe
+if [ ! -f .nabu-config ]; then
+  echo "✗ Falta .nabu-config en $SCRIPT_DIR"
+  echo "  Corré: bash install.sh"
+  exit 1
+fi
+
+# Source config (export todas variables)
+set -a
+source .nabu-config
+set +a
+
+# Verificar API key cargada
+if [ -z "$ANTHROPIC_API_KEY" ]; then
+  echo "⚠ ANTHROPIC_API_KEY no está set en .nabu-config"
+  echo "  Editá: nano .nabu-config"
+  echo "  Y descomenta + completá la línea: export ANTHROPIC_API_KEY=\"sk-ant-...\""
+  echo "  (Pedile la key a Daniel privadamente — NO la subas al repo)"
+  exit 1
+fi
+
+# Verificar Claude Code instalado
+if ! command -v claude >/dev/null 2>&1; then
+  echo "✗ Claude Code no instalado"
+  echo "  brew install --cask claude-code"
+  exit 1
+fi
+
+# Lanzar Claude Code (read CLAUDE.md, modo nabu-master)
+exec claude "$@"

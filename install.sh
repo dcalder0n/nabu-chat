@@ -142,19 +142,49 @@ echo
 
 # ─── 5. Done ──────────────────────────────────────────────────────────────────
 
+# ─── 6. Anthropic API Key + INTERNAL_SVC_TOKEN setup ─────────────────────────
+
+echo -e "${BOLD}Credenciales (te las pasa Daniel privado por WhatsApp)${NC}"
+echo
+
+# Make wrapper executable
+chmod +x "$TARGET_DIR/nabu" 2>/dev/null || true
+
+# Check if .nabu-config has ANTHROPIC_API_KEY uncommented + filled
+HAS_KEY=$(grep -E "^export ANTHROPIC_API_KEY=" "$TARGET_DIR/.nabu-config" 2>/dev/null | grep -v "your-key" | head -1)
+
+if [ -z "$HAS_KEY" ]; then
+  echo -e "  ${YELLOW}⚠${NC} ANTHROPIC_API_KEY no está set"
+  echo
+  echo -e "  ${BOLD}PASO MANUAL — pedile a Daniel la API key NABU + el token interno:${NC}"
+  echo
+  echo -e "  Después editá tu config:"
+  echo -e "    ${BOLD}nano ~/nabu-chat/.nabu-config${NC}"
+  echo
+  echo -e "  Buscá las 2 líneas comentadas y descomentá + reemplazá:"
+  echo -e "    ${GRAY}# export ANTHROPIC_API_KEY=\"...\"${NC}"
+  echo -e "    ${GRAY}# export INTERNAL_SVC_TOKEN=\"...\"${NC}"
+  echo
+  echo -e "  Guardá (Ctrl+O Enter Ctrl+X)"
+fi
+echo
+
+# ─── 7. Done ──────────────────────────────────────────────────────────────────
+
 echo -e "${BOLD}${GREEN}Instalación completa.${NC}"
 echo
 echo -e "${BOLD}Para arrancar conversación con nabu-master:${NC}"
 echo
-echo -e "  ${BOLD}cd ~/nabu-chat${NC}"
-echo -e "  ${BOLD}claude${NC}"
+echo -e "  ${BOLD}~/nabu-chat/nabu${NC}"
 echo
-echo -e "${GRAY}Claude Code lee CLAUDE.md y entra automáticamente en modo nabu-master.${NC}"
+echo -e "${GRAY}(El wrapper ./nabu carga las credenciales auto + arranca Claude Code${NC}"
+echo -e "${GRAY} en modo nabu-master. NO arranquen 'claude' directamente o pedirá subscripción.)${NC}"
+echo
 echo -e "${GRAY}Conversá natural en español. Probá:${NC}"
 echo -e "${GRAY}  • \"necesito una cotización Vencor para X cliente\"${NC}"
 echo -e "${GRAY}  • \"qué agentes hay activos\"${NC}"
-echo -e "${GRAY}  • \"cómo va el handoff <id>\"${NC}"
+echo -e "${GRAY}  • \"preguntale a fel-agent cuántas facturas hoy\"${NC}"
 echo -e "${GRAY}  • \"necesito vacaciones próxima semana\"${NC}"
 echo
-echo -e "${GRAY}Para actualizar nabu-chat más adelante: cd ~/nabu-chat && git pull${NC}"
+echo -e "${GRAY}Para actualizar más adelante: cd ~/nabu-chat && git pull${NC}"
 echo

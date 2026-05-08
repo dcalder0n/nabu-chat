@@ -1,4 +1,5 @@
 .nabu-config.daniel
+.nabu-config.local
 user.json
 *.log
 .DS_Store
