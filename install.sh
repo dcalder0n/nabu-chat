@@ -80,27 +80,37 @@ echo
 # ─── 3. User config ───────────────────────────────────────────────────────────
 
 if [ ! -f user.json ]; then
-  echo -e "${BOLD}Datos del empleado${NC}"
-  echo -e "${GRAY}(Solo se guarda local en tu Mac, no se sube a NABU sin handoff explícito)${NC}"
-  echo
-  read -p "  Email NABU Workspace (ej: alejandra@vencor.com): " EMAIL
-  read -p "  Nombre completo: " NAME
-  echo "  Empresa principal:"
-  echo "    1) Ventamatic"
-  echo "    2) BZL Media"
-  echo "    3) Vencor"
-  echo "    4) Julia Bakery"
-  echo "    5) Nabu Holdings"
-  read -p "  Tu opción (1-5): " EMPRESA_NUM
-  case "$EMPRESA_NUM" in
-    1) EMPRESA="Ventamatic" ;;
-    2) EMPRESA="BZL Media" ;;
-    3) EMPRESA="Vencor" ;;
-    4) EMPRESA="Julia Bakery" ;;
-    5) EMPRESA="Nabu Holdings" ;;
-    *) EMPRESA="$EMPRESA_NUM" ;;
-  esac
-  read -p "  Rol (ej: ventas, contabilidad, diseño, ops, gerente): " ROLE
+  # Auto-config si Daniel pasó datos via env vars
+  if [ -n "$NABU_USER_EMAIL" ] && [ -n "$NABU_USER_NAME" ] && [ -n "$NABU_USER_EMPRESA" ] && [ -n "$NABU_USER_ROLE" ]; then
+    EMAIL="$NABU_USER_EMAIL"
+    NAME="$NABU_USER_NAME"
+    EMPRESA="$NABU_USER_EMPRESA"
+    ROLE="$NABU_USER_ROLE"
+    echo -e "${BOLD}Datos del empleado${NC} ${GREEN}(auto-config)${NC}"
+    echo -e "  $NAME · $EMAIL · $EMPRESA · $ROLE"
+  else
+    echo -e "${BOLD}Datos del empleado${NC}"
+    echo -e "${GRAY}(Solo se guarda local en tu Mac, no se sube a NABU sin handoff explícito)${NC}"
+    echo
+    read -p "  Email NABU Workspace (ej: alejandra@vencor.com): " EMAIL
+    read -p "  Nombre completo: " NAME
+    echo "  Empresa principal:"
+    echo "    1) Ventamatic"
+    echo "    2) BZL Media"
+    echo "    3) Vencor"
+    echo "    4) Julia Bakery"
+    echo "    5) Nabu Holdings"
+    read -p "  Tu opción (1-5): " EMPRESA_NUM
+    case "$EMPRESA_NUM" in
+      1) EMPRESA="Ventamatic" ;;
+      2) EMPRESA="BZL Media" ;;
+      3) EMPRESA="Vencor" ;;
+      4) EMPRESA="Julia Bakery" ;;
+      5) EMPRESA="Nabu Holdings" ;;
+      *) EMPRESA="$EMPRESA_NUM" ;;
+    esac
+    read -p "  Rol (ej: ventas, contabilidad, diseño, ops, gerente): " ROLE
+  fi
 
   cat > user.json <<EOF
 {
