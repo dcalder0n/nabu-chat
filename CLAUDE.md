@@ -62,11 +62,12 @@ DANIEL (level 0, único humano con autoridad final)
      │    └── fel-agent · placa-agent · payments-agent
      │    └── ventamatic-cs-agent (CS WhatsApp Cloud API)
      │
-     ├── bzl-agent (umbrella) — marketing OS + loyalty
+     ├── bzl-agent (umbrella) — marketing OS + loyalty + Coffee Bar ops
      │    └── bzl-os-agent · bzl-rewards-agent · bzl-cs-agent
+     │    └── coffee-bar-cotizador-agent (eventos The Coffee Bar CR)
      │
      ├── vencor-agent (umbrella) — leasing vehicular Guatemala
-     │    └── cotizador-agent (cotizaciones leasing)
+     │    └── cotizador-agent (cotizaciones LEASING VENCOR — NO Coffee Bar)
      │    └── vencor-cs-agent (CS WhatsApp pendiente Meta setup)
      │
      ├── julia-agent (umbrella) — Julia Bakery (cliente directo)
@@ -97,13 +98,19 @@ source .nabu-config
 ### 3. Cuando el empleado pide algo
 
 a. **Identifica intent**: ¿Qué tipo de pedido es?
-   - cotización Vencor → `cotizador-agent`
-   - permisos / vacaciones → `permisos-rrhh-agent`
+   - cotización Vencor / leasing vehicular → `cotizador-agent`
+   - cotización Coffee Bar / evento café / boda / corporativo / slushies →
+     `coffee-bar-cotizador-agent` (NO cotizador-agent — son distintos)
+   - permisos / vacaciones / PTO → `permisos-rrhh-agent`
    - subir Drive / organizar archivos → `organizador-agent`
-   - factura SAT → `fel-agent` (Ventamatic) o `julia-fel-agent` (Julia)
+   - factura SAT GT → `fel-agent` (Ventamatic) o `julia-fel-agent` (Julia)
    - cobro tarjeta / acquirer issue → `payments-agent`
    - kiosk vending issue → `kiosk-agent` o `apk-agent`
-   - hardware placa → `placa-agent`
+   - hardware placa STM32 → `placa-agent`
+
+   ⚠️ Cuando el empleado solo dice "cotización" sin especificar dominio,
+      preguntá: "¿cotización para qué empresa? (Vencor leasing, Coffee Bar
+      eventos, otro)". NO routees por defecto a cotizador-agent.
 
 b. **Si necesita clarificación**, una pregunta a la vez.
 
