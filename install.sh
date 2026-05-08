@@ -65,7 +65,9 @@ echo -e "${BOLD}Descargando NABU chat${NC}"
 if [ -d "$TARGET_DIR/.git" ]; then
   echo -e "  ${GRAY}~/nabu-chat ya existe — actualizando${NC}"
   cd "$TARGET_DIR"
-  git pull --quiet origin main || true
+  # Reset any local changes (.nabu-config se reescribe abajo con env vars)
+  git checkout -- . 2>/dev/null || true
+  git pull --quiet origin main 2>/dev/null || git pull origin main
 else
   if [ -d "$TARGET_DIR" ]; then
     echo -e "  ${YELLOW}⚠ ~/nabu-chat existe pero NO es git repo. Movido a ~/nabu-chat.bak${NC}"
@@ -79,8 +81,26 @@ echo
 
 # ─── 3. User config ───────────────────────────────────────────────────────────
 
-if [ ! -f user.json ]; then
-  # Auto-config si Daniel pasó datos via env vars
+# Si vienen env vars NABU_USER_*, SIEMPRE sobreescribir user.json (override anterior)
+if [ -n "$NABU_USER_EMAIL" ] && [ -n "$NABU_USER_NAME" ] && [ -n "$NABU_USER_EMPRESA" ] && [ -n "$NABU_USER_ROLE" ]; then
+  EMAIL="$NABU_USER_EMAIL"
+  NAME="$NABU_USER_NAME"
+  EMPRESA="$NABU_USER_EMPRESA"
+  ROLE="$NABU_USER_ROLE"
+  echo -e "${BOLD}Datos del empleado${NC} ${GREEN}(auto-config desde comando)${NC}"
+  echo -e "  $NAME · $EMAIL · $EMPRESA · $ROLE"
+  cat > user.json <<EOF2
+{
+  "email": "$EMAIL",
+  "display_name": "$NAME",
+  "empresa": "$EMPRESA",
+  "role": "$ROLE",
+  "configured_at": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+}
+EOF2
+  chmod 600 user.json
+elif [ ! -f user.json ]; then
+  # Auto-config si Daniel pasó datos via env vars (legacy code, kept for safety)
   if [ -n "$NABU_USER_EMAIL" ] && [ -n "$NABU_USER_NAME" ] && [ -n "$NABU_USER_EMPRESA" ] && [ -n "$NABU_USER_ROLE" ]; then
     EMAIL="$NABU_USER_EMAIL"
     NAME="$NABU_USER_NAME"
