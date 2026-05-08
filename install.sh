@@ -142,30 +142,40 @@ echo
 
 # ─── 5. Done ──────────────────────────────────────────────────────────────────
 
-# ─── 6. Anthropic API Key + INTERNAL_SVC_TOKEN setup ─────────────────────────
+# ─── 6. Credenciales — auto-config si vienen via env vars ─────────────────────
 
-echo -e "${BOLD}Credenciales (te las pasa Daniel privado por WhatsApp)${NC}"
-echo
+echo -e "${BOLD}Credenciales${NC}"
 
-# Make wrapper executable
 chmod +x "$TARGET_DIR/nabu" 2>/dev/null || true
 
-# Check if .nabu-config has ANTHROPIC_API_KEY uncommented + filled
-HAS_KEY=$(grep -E "^export ANTHROPIC_API_KEY=" "$TARGET_DIR/.nabu-config" 2>/dev/null | grep -v "your-key" | head -1)
+# Auto-config si Daniel pasó las creds inline (env vars del comando)
+if [ -n "$ANTHROPIC_API_KEY" ] && [ -n "$INTERNAL_SVC_TOKEN" ]; then
+  # Make local copy of config (NOT committed to repo)
+  cp "$TARGET_DIR/.nabu-config" "$TARGET_DIR/.nabu-config.local"
 
-if [ -z "$HAS_KEY" ]; then
-  echo -e "  ${YELLOW}⚠${NC} ANTHROPIC_API_KEY no está set"
-  echo
-  echo -e "  ${BOLD}PASO MANUAL — pedile a Daniel la API key NABU + el token interno:${NC}"
-  echo
-  echo -e "  Después editá tu config:"
-  echo -e "    ${BOLD}nano ~/nabu-chat/.nabu-config${NC}"
-  echo
-  echo -e "  Buscá las 2 líneas comentadas y descomentá + reemplazá:"
-  echo -e "    ${GRAY}# export ANTHROPIC_API_KEY=\"...\"${NC}"
-  echo -e "    ${GRAY}# export INTERNAL_SVC_TOKEN=\"...\"${NC}"
-  echo
-  echo -e "  Guardá (Ctrl+O Enter Ctrl+X)"
+  # Append credentials uncommented
+  cat >> "$TARGET_DIR/.nabu-config.local" <<EOF
+
+# Auto-configured by install ($(date -u '+%Y-%m-%d %H:%M UTC'))
+export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+export INTERNAL_SVC_TOKEN="$INTERNAL_SVC_TOKEN"
+EOF
+
+  # Replace public .nabu-config with local (so wrapper picks it up)
+  mv "$TARGET_DIR/.nabu-config.local" "$TARGET_DIR/.nabu-config"
+  chmod 600 "$TARGET_DIR/.nabu-config"
+
+  echo -e "  ${GREEN}✓${NC} ANTHROPIC_API_KEY configurada (${#ANTHROPIC_API_KEY} chars)"
+  echo -e "  ${GREEN}✓${NC} INTERNAL_SVC_TOKEN configurado (${#INTERNAL_SVC_TOKEN} chars)"
+  echo -e "  ${GRAY}(.nabu-config chmod 600, solo legible por vos)${NC}"
+else
+  # Fallback manual si las vars no vinieron
+  HAS_KEY=$(grep -E "^export ANTHROPIC_API_KEY=" "$TARGET_DIR/.nabu-config" 2>/dev/null | head -1)
+  if [ -z "$HAS_KEY" ]; then
+    echo -e "  ${YELLOW}⚠${NC} ANTHROPIC_API_KEY no recibida via env var ni config"
+    echo -e "  ${GRAY}  Pedile a Daniel la 1-liner CON credenciales (incluye env vars)${NC}"
+    echo -e "  ${GRAY}  O editá manual: nano ~/nabu-chat/.nabu-config${NC}"
+  fi
 fi
 echo
 
