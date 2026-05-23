@@ -1,0 +1,13 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  ok:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sanity
+        run: |
+          echo "Repo OK · placeholder check para satisfacer Claude Code UI"
+          ls -la
