@@ -156,7 +156,7 @@ echo
 echo -e "${BOLD}Probando conexión NABU API${NC}"
 if [ -f .nabu-config ]; then
   source .nabu-config
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 8 "${NABU_API_URL}/api/handoffs?limit=1" 2>/dev/null || echo "000")
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 8 -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/handoffs?limit=1" 2>/dev/null || echo "000")
   if [ "$STATUS" = "200" ]; then
     echo -e "  ${GREEN}✓${NC} ${NABU_API_URL} responde 200"
   elif [ "$STATUS" = "000" ]; then

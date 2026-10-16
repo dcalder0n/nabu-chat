@@ -11,4 +11,5 @@ export SUPABASE_URL="https://dgrgwyrkvnrhlnrifdoj.supabase.co"
 # export ANTHROPIC_API_KEY="sk-ant-..."
 
 # Internal token para invoke directo de agentes (POST /api/agent-invoke):
+# OBLIGATORIO desde 2026-10-16: sin este token el API rechaza todo lo que entra desde internet.
 # export INTERNAL_SVC_TOKEN="..."

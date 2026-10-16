@@ -168,7 +168,7 @@ echo
 
 # ─── 7. Smoke test ──────────────────────────────────────────────────────────
 echo -e "${BOLD}7) Smoke test conectividad NABU API${NC}"
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${NABU_API_URL}/api/agent-invoke")
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/agent-invoke")
 if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "405" ]; then
   echo -e "   ${GREEN}✓${NC} NABU API responde (HTTP $HTTP_CODE — endpoint vivo)"
 elif [ "$HTTP_CODE" = "200" ]; then
@@ -183,7 +183,7 @@ echo
 
 # ─── 8. Notify NABU API que se instaló ──────────────────────────────────────
 echo -e "${BOLD}8) Registrando install en NABU${NC}"
-curl -s -X POST "${NABU_API_URL}/api/employees/installed" \
+curl -s -X POST -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/employees/installed" \
   -H "Content-Type: application/json" \
   -d "$(jq -nc \
     --arg email "$NABU_USER_EMAIL" \

@@ -198,7 +198,7 @@ EOF
 )
 
 # Send handoff
-curl -s -X POST "${NABU_API_URL}/api/handoffs" \
+curl -s -X POST -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/handoffs" \
   -H "Content-Type: application/json" \
   -d "$(jq -nc --arg t "$HANDOFF_TEXT" --arg a "<wagent_name> (via <employee-email>)" '{text:$t, actor:$a}')"
 ```
@@ -334,7 +334,7 @@ que el agent recipient haya procesado y respondido.
 
 ```bash
 # 1. Mandar handoff
-HANDOFF_RESP=$(curl -sf -X POST "${NABU_API_URL}/api/handoffs" \
+HANDOFF_RESP=$(curl -sf -X POST -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/handoffs" \
   -H "Content-Type: application/json" \
   -d "$(jq -nc --arg t "$LAYER17_TEXT" --arg a "<wagent_name>" '{text:$t, actor:$a}')")
 
@@ -351,7 +351,7 @@ while true; do
     break
   fi
   
-  STATUS=$(curl -sf "${NABU_API_URL}/api/handoffs?fromAgent=<wagent_name>&limit=20" | \
+  STATUS=$(curl -sf -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/handoffs?fromAgent=<wagent_name>&limit=20" | \
     jq -r --arg id "$HANDOFF_ID" '.handoffs[] | select(.id == $id) | .routingStatus')
   
   if [ "$STATUS" = "complete" ] || [ "$STATUS" = "failed" ]; then
@@ -363,7 +363,7 @@ done
 
 # 3. Buscar respuesta del agent recipient (handoff que él te mandó back)
 # Filter: toAgents=[nabu-master] AND fromAgent=<recipient> AND created_after START
-curl -sf "${NABU_API_URL}/api/handoffs?fromAgent=<recipient>&limit=5" | \
+curl -sf -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/handoffs?fromAgent=<recipient>&limit=5" | \
   jq -r '.handoffs[] | select(.subject | contains("RESPUESTA"))' | head -1
 ```
 

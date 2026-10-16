@@ -71,7 +71,7 @@ echo -e "${GREEN}✓${NC} .nabu-config presente"
 
 # Smoke test API
 source .nabu-config
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${NABU_API_URL}/api/handoffs?limit=1" 2>/dev/null || echo "000")
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 5 -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/handoffs?limit=1" 2>/dev/null || echo "000")
 if [ "$STATUS" = "200" ]; then
   echo -e "${GREEN}✓${NC} NABU API alcanzable en ${NABU_API_URL}"
 else
