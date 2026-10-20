@@ -23,9 +23,11 @@ set -a
 source .nabu-config
 set +a
 
-# Verificar API key cargada
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-  echo "⚠ ANTHROPIC_API_KEY no está set en .nabu-config"
+# Credencial: suscripción del equipo (CLAUDE_CODE_OAUTH_TOKEN o login de Claude) o llave del API.
+# Desde el 20-oct-2026 los wagents usan la suscripción de nabu-b (info@): la llave del API no sirve
+# para Claude Code interactivo («Credit balance too low»). Si hay token o login, no exigimos llave.
+if [ -z "$ANTHROPIC_API_KEY" ] && [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && ! claude auth status 2>/dev/null | grep -q '"loggedIn": true'; then
+  echo "⚠ No hay credencial de Claude: falta CLAUDE_CODE_OAUTH_TOKEN en .nabu-config (pedíselo a Daniel)"
   echo "  Editá: nano .nabu-config"
   echo "  Y descomenta + completá la línea: export ANTHROPIC_API_KEY=\"sk-ant-...\""
   echo "  (Pedile la key a Daniel privadamente — NO la subas al repo)"
