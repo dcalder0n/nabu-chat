@@ -131,9 +131,12 @@ echo -e "${BOLD}5) user.json + .nabu-config${NC}"
 cat > "$TARGET_DIR/user.json" <<EOF
 {
   "name": "${NABU_USER_NAME}",
+  "display_name": "${NABU_USER_NAME}",
   "email": "${NABU_USER_EMAIL}",
   "empresa": "${NABU_USER_EMPRESA}",
   "rol": "${NABU_USER_ROL}",
+  "role": "${NABU_USER_ROL}",
+  "wagent_name": "${NABU_WAGENT_NAME:-$(echo "${NABU_USER_EMAIL}" | cut -d@ -f1)-wagent}",
   "phone_e164": "${NABU_USER_PHONE:-}",
   "phone_role": "${NABU_USER_PHONE_ROLE:-}",
   "installed_at": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
