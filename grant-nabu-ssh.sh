@@ -14,7 +14,8 @@
 #   3. Habilita Remote Login en macOS (Sharing → Remote Login)
 #   4. Agrega el usuario al grupo com.apple.access_ssh
 #   5. Verifica que SSH responde
-#   6. Pide password admin Mac UNA VEZ (sudo)
+#   6. Instala/conecta Tailscale (hostname <usuario>-mac)
+#   7. Pide password admin Mac UNA VEZ (sudo)
 
 set -e
 
@@ -85,7 +86,35 @@ else
 fi
 echo
 
-# ─── 4. Final summary ────────────────────────────────────────────────────────
+# ─── 4. Tailscale (túnel para soporte remoto fuera de la oficina) ───────────
+echo -e "${BOLD}4) Tailscale${NC}"
+TS_BIN="$(command -v tailscale || true)"
+[ -z "$TS_BIN" ] && [ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ] && TS_BIN=/Applications/Tailscale.app/Contents/MacOS/Tailscale
+if [ -z "$TS_BIN" ]; then
+  if command -v brew >/dev/null 2>&1; then
+    echo -e "   Instalando Tailscale (brew)..."
+    brew install tailscale >/dev/null 2>&1 && sudo brew services start tailscale >/dev/null 2>&1 || true
+    TS_BIN="$(command -v tailscale || true)"
+  fi
+fi
+if [ -z "$TS_BIN" ]; then
+  echo -e "   ${YELLOW}⚠${NC} No pude instalar Tailscale solo. Bajalo de https://tailscale.com/download/mac y corré este script de nuevo."
+else
+  TS_HOST="$(echo "${NABU_USER}" | tr '[:upper:]' '[:lower:]')-mac"
+  echo -e "   ${GRAY}hostname: ${TS_HOST}${NC}"
+  # Si ya está logueado no pide nada; si no, imprime un enlace de login (timeout 20s para no colgar)
+  if "$TS_BIN" status >/dev/null 2>&1; then
+    sudo "$TS_BIN" set --hostname="${TS_HOST}" >/dev/null 2>&1 || true
+    echo -e "   ${GREEN}✓${NC} Tailscale ya conectado: $("$TS_BIN" ip -4 2>/dev/null | head -1)"
+  else
+    echo -e "   ${YELLOW}→ Abrí el enlace que aparece abajo e iniciá sesión para conectar esta Mac:${NC}"
+    sudo "$TS_BIN" up --hostname="${TS_HOST}" 2>&1 | head -20 &
+    TS_PID=$!; sleep 20; kill $TS_PID 2>/dev/null || true
+  fi
+fi
+echo
+
+# ─── 5. Final summary ────────────────────────────────────────────────────────
 echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════${NC}"
 echo -e "${BOLD}${GREEN}  ✓ NABU autorizado para conectar a tu Mac${NC}"
 echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════${NC}"
