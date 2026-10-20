@@ -87,6 +87,9 @@ fi
 echo
 
 # ─── 4. Tailscale (túnel para soporte remoto fuera de la oficina) ───────────
+# TS_AUTHKEY opcional (env o --authkey <key>). Nunca se imprime.
+TS_AUTHKEY="${TS_AUTHKEY:-}"
+if [ "${1:-}" = "--authkey" ] && [ -n "${2:-}" ]; then TS_AUTHKEY="$2"; fi
 echo -e "${BOLD}4) Tailscale${NC}"
 TS_BIN="$(command -v tailscale || true)"
 [ -z "$TS_BIN" ] && [ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ] && TS_BIN=/Applications/Tailscale.app/Contents/MacOS/Tailscale
@@ -97,19 +100,30 @@ if [ -z "$TS_BIN" ]; then
     TS_BIN="$(command -v tailscale || true)"
   fi
 fi
+TS_RESULT="no instalado"
 if [ -z "$TS_BIN" ]; then
   echo -e "   ${YELLOW}⚠${NC} No pude instalar Tailscale solo. Bajalo de https://tailscale.com/download/mac y corré este script de nuevo."
 else
   TS_HOST="$(echo "${NABU_USER}" | tr '[:upper:]' '[:lower:]')-mac"
   echo -e "   ${GRAY}hostname: ${TS_HOST}${NC}"
-  # Si ya está logueado no pide nada; si no, imprime un enlace de login (timeout 20s para no colgar)
-  if "$TS_BIN" status >/dev/null 2>&1; then
-    sudo "$TS_BIN" set --hostname="${TS_HOST}" >/dev/null 2>&1 || true
-    echo -e "   ${GREEN}✓${NC} Tailscale ya conectado: $("$TS_BIN" ip -4 2>/dev/null | head -1)"
+  if ! "$TS_BIN" ip -4 >/dev/null 2>&1; then
+    if [ -n "$TS_AUTHKEY" ]; then
+      sudo "$TS_BIN" up --hostname="${TS_HOST}" --authkey="${TS_AUTHKEY}" >/dev/null 2>&1 || true
+    else
+      echo -e "   ${YELLOW}→ Iniciá sesión con la cuenta Tailscale de Ventamatic en el enlace de abajo (esperamos hasta 60s):${NC}"
+      # timeout nativo del propio tailscale: sin procesos huérfanos
+      sudo "$TS_BIN" up --hostname="${TS_HOST}" --timeout=60s 2>&1 | head -20 || true
+    fi
   else
-    echo -e "   ${YELLOW}→ Abrí el enlace que aparece abajo e iniciá sesión para conectar esta Mac:${NC}"
-    sudo "$TS_BIN" up --hostname="${TS_HOST}" 2>&1 | head -20 &
-    TS_PID=$!; sleep 20; kill $TS_PID 2>/dev/null || true
+    sudo "$TS_BIN" set --hostname="${TS_HOST}" >/dev/null 2>&1 || true
+  fi
+  TS_IP="$("$TS_BIN" ip -4 2>/dev/null | head -1 || true)"
+  if [ -n "$TS_IP" ]; then
+    TS_RESULT="${TS_HOST} / ${TS_IP}"
+    echo -e "   ${GREEN}✓${NC} Tailscale conectado: ${TS_RESULT}"
+  else
+    TS_RESULT="login pendiente"
+    echo -e "   ${YELLOW}⚠${NC} Tailscale: login pendiente (corré el script otra vez tras iniciar sesión)"
   fi
 fi
 echo
@@ -121,6 +135,7 @@ echo -e "${BOLD}${GREEN}══════════════════�
 echo
 echo -e "Daniel/NABU ahora va a conectarse remoto a:"
 echo -e "   ${CYAN}${NABU_USER}@$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)${NC}"
+echo -e "Tailscale: ${CYAN}${TS_RESULT:-n/a}${NC}"
 echo
 echo -e "${GRAY}Si querés REVOCAR este acceso en el futuro, editá ~/.ssh/authorized_keys${NC}"
 echo -e "${GRAY}y borrá la línea marcada como 'nabu-master support access'.${NC}"
