@@ -1,15 +1,17 @@
-# NABU CLI config — auto-loaded por ~/nabu-chat/nabu wrapper
-# NO edites NABU_API_URL / SUPABASE_URL — son fijas del ecosistema NABU.
-# SÍ tenés que pegar 2 credenciales que Daniel te pasa privado.
+# NABU chat — plantilla PÚBLICA (está en git). NO pongas credenciales acá.
+#
+# El lanzador ~/nabu-chat/nabu carga primero este archivo y DESPUÉS ~/.nabu-config
+# (en tu carpeta personal, chmod 600, fuera del repo). Si los dos definen lo mismo,
+# gana ~/.nabu-config.
+#
+# ~/.nabu-config lo escriben bootstrap.sh / install.sh y contiene:
+#   export NABU_API_URL="https://api.calderon.coffee"
+#   export INTERNAL_SVC_TOKEN="..."        # te lo da Daniel en privado; nunca lo pegues en el chat
+#   export NABU_WAGENT_NAME="<tu>-wagent"  # el nombre de tu agente en el registro (te lo da Daniel)
+#   export CLAUDE_CODE_OAUTH_TOKEN="..."   # opcional: suscripción del equipo, si no hiciste login en Claude
+#
+# Ya NO se usa ANTHROPIC_API_KEY (desde el 20-oct-2026 los wagents usan la suscripción del equipo)
+# ni Supabase (retirado; todo va por el bus NABU_API_URL).
 
-# === FIJAS — no tocar ===
+# === FIJA — no tocar ===
 export NABU_API_URL="https://api.calderon.coffee"
-export SUPABASE_URL="https://dgrgwyrkvnrhlnrifdoj.supabase.co"
-
-# === TUYAS — Daniel te las pasa por WhatsApp privado ===
-# Anthropic API key (Claude Code la usa, NO necesitás subscripción Pro/Max):
-# export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Internal token para invoke directo de agentes (POST /api/agent-invoke):
-# OBLIGATORIO desde 2026-10-16: sin este token el API rechaza todo lo que entra desde internet.
-# export INTERNAL_SVC_TOKEN="..."

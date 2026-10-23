@@ -1,38 +1,30 @@
 #!/usr/bin/env bash
-# ~/nabu-chat/nabu — wrapper que carga .nabu-config + lanza Claude Code
+# ~/nabu-chat/nabu — wrapper que carga la config + lanza Claude Code
 #
 # Uso: ./nabu  (o ~/nabu-chat/nabu desde cualquier lado)
 #
-# Auto-carga ANTHROPIC_API_KEY + NABU_API_URL + INTERNAL_SVC_TOKEN antes de
-# arrancar Claude. Empleado NO necesita configurar nada en su shell.
+# Carga ./.nabu-config (plantilla del repo, URL fija) y DESPUÉS ~/.nabu-config
+# (credenciales del empleado, chmod 600, fuera del repo; gana sobre la plantilla):
+# NABU_API_URL + INTERNAL_SVC_TOKEN + NABU_WAGENT_NAME (+ CLAUDE_CODE_OAUTH_TOKEN).
+# Empleado NO necesita configurar nada en su shell.
 
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
-# Verificar config existe
-if [ ! -f .nabu-config ]; then
-  echo "✗ Falta .nabu-config en $SCRIPT_DIR"
+# Verificar que haya config
+if [ ! -f .nabu-config ] && [ ! -f "$HOME/.nabu-config" ]; then
+  echo "✗ Falta ~/.nabu-config (y la plantilla .nabu-config de $SCRIPT_DIR)"
   echo "  Corré: bash install.sh"
   exit 1
 fi
 
-# Source config (export todas variables)
+# Source config (export todas variables). El del home va último: gana.
 set -a
-source .nabu-config
+[ -f .nabu-config ] && source .nabu-config
+[ -f "$HOME/.nabu-config" ] && source "$HOME/.nabu-config"
 set +a
-
-# Credencial: suscripción del equipo (CLAUDE_CODE_OAUTH_TOKEN o login de Claude) o llave del API.
-# Desde el 20-oct-2026 los wagents usan la suscripción de nabu-b (info@): la llave del API no sirve
-# para Claude Code interactivo («Credit balance too low»). Si hay token o login, no exigimos llave.
-if [ -z "$ANTHROPIC_API_KEY" ] && [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && ! claude auth status 2>/dev/null | grep -q '"loggedIn": true'; then
-  echo "⚠ No hay credencial de Claude: falta CLAUDE_CODE_OAUTH_TOKEN en .nabu-config (pedíselo a Daniel)"
-  echo "  Editá: nano .nabu-config"
-  echo "  Y descomenta + completá la línea: export ANTHROPIC_API_KEY=\"sk-ant-...\""
-  echo "  (Pedile la key a Daniel privadamente — NO la subas al repo)"
-  exit 1
-fi
 
 # Verificar Claude Code instalado
 if ! command -v claude >/dev/null 2>&1; then
@@ -41,5 +33,31 @@ if ! command -v claude >/dev/null 2>&1; then
   exit 1
 fi
 
-# Lanzar Claude Code (read CLAUDE.md, modo nabu-master)
+# Credencial de Claude: suscripción del equipo (CLAUDE_CODE_OAUTH_TOKEN o login de Claude).
+# Desde el 20-oct-2026 los wagents usan la suscripción de nabu-b (info@): la llave del API no sirve
+# para Claude Code interactivo («Credit balance too low»), así que ya no se pide.
+if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && ! claude auth status 2>/dev/null | grep -q '"loggedIn": true'; then
+  echo "⚠ No hay credencial de Claude: pedile a Daniel el CLAUDE_CODE_OAUTH_TOKEN"
+  echo "  y agregalo a ~/.nabu-config así:  export CLAUDE_CODE_OAUTH_TOKEN=\"...\""
+  echo "  (NO lo pongas en el .nabu-config del repo ni lo pegues en el chat)"
+  exit 1
+fi
+
+# Comprobación previa (sin imprimir la clave): agente válido + clave + bus.
+# No corta el arranque: si solo parpadea el túnel, el empleado igual puede abrir el chat.
+WAGENT="${NABU_WAGENT_NAME:-$(jq -r '.wagent_name // empty' user.json 2>/dev/null || true)}"
+if [ -z "$INTERNAL_SVC_TOKEN" ] || [ -z "$WAGENT" ]; then
+  echo "⚠ Falta INTERNAL_SVC_TOKEN en ~/.nabu-config o wagent_name en user.json — corré bash install.sh o pedíselo a Daniel"
+else
+  C=$(printf 'header = "Authorization: Bearer %s"\n' "$INTERNAL_SVC_TOKEN" \
+    | curl -s -o /dev/null -w '%{http_code}' -m 8 -K - \
+        "${NABU_API_URL:-https://api.calderon.coffee}/api/handoffs/inbox/${WAGENT}" 2>/dev/null) || true
+  C="${C:-000}"
+  if [ "$C" != "200" ]; then
+    echo "⚠ Bandeja de ${WAGENT}: HTTP $C (401/403=clave mala · 404=wagent_name no existe · 000/5xx=túnel o bus caído)."
+    echo "  El chat abre igual, pero no va a poder mandar pedidos a NABU hasta que esto dé 200."
+  fi
+fi
+
+# Lanzar Claude Code (lee CLAUDE.md, modo wagent del empleado)
 exec claude "$@"
