@@ -3,3 +3,4 @@
 user.json
 *.log
 .DS_Store
+user.json.*

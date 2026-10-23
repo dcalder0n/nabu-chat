@@ -3,20 +3,24 @@
 #
 # Uso (empleado):
 #   curl -fsSL https://raw.githubusercontent.com/dcalder0n/nabu-chat/main/install.sh | bash
+#   (si falta la clave de NABU, la pide sin mostrarla; nunca la pongas en la línea de comandos)
 #
 # Uso con datos (Daniel):
 #   NABU_USER_EMAIL=... NABU_USER_NAME=... NABU_USER_EMPRESA=... NABU_USER_ROLE=... \
-#   NABU_WAGENT_NAME=<nombre-en-el-registry> INTERNAL_SVC_TOKEN=... [CLAUDE_CODE_OAUTH_TOKEN=...] \
-#   bash install.sh
+#   NABU_WAGENT_NAME=<nombre-en-el-registry> bash install.sh
+#   (INTERNAL_SVC_TOKEN y CLAUDE_CODE_OAUTH_TOKEN se aceptan por entorno —p. ej. exportadas desde un
+#    archivo—, pero si falta la clave el script la pide por la terminal: así no queda en el historial)
 #   (NABU_USER_ROL se acepta como sinónimo de NABU_USER_ROLE)
 #
 # Qué hace:
 #   1. Verifica Claude Code + jq + curl + git
 #   2. Clona/actualiza ~/nabu-chat
 #   3. Pide email + nombre + empresa + rol + nombre del agente → user.json (con wagent_name)
-#   4. Guarda credenciales en ~/.nabu-config (chmod 600, FUERA del repo)
+#   4. Guarda credenciales en ~/.nabu-config (chmod 600, FUERA del repo); si falta la clave, la pide sin eco
 #   5. Prueba la bandeja del agente (GET /api/handoffs/inbox/<wagent>): solo 200 es OK
 #   6. Te dice cómo arrancar conversación
+#
+# Para actualizar más adelante: volvé a correr este mismo comando (no `git pull` a mano).
 #
 # El wagent_name sale del registry de agentes (te lo da Daniel); NUNCA se deriva del email.
 # Ya no se usa ANTHROPIC_API_KEY (suscripción del equipo desde el 20-oct-2026) ni Supabase.
@@ -31,9 +35,10 @@ GRAY="\033[0;90m"
 BOLD="\033[1m"
 NC="\033[0m"
 
-REPO_URL="https://github.com/dcalder0n/nabu-chat.git"
+REPO_URL="${NABU_CHAT_REPO_URL:-https://github.com/dcalder0n/nabu-chat.git}"  # la variable solo sirve para pruebas
 TARGET_DIR="${HOME}/nabu-chat"
 HOME_CONFIG="${HOME}/.nabu-config"
+SCRIPT_NOMBRE="install.sh"
 
 NABU_USER_ROLE="${NABU_USER_ROLE:-$NABU_USER_ROL}"
 NABU_USER_ROL="$NABU_USER_ROLE"
@@ -47,10 +52,21 @@ preguntar() {  # preguntar "texto" VAR
 
 wagent_valido() { case "$1" in ''|*[!a-z0-9-]*) return 1 ;; *) return 0 ;; esac; }
 
-# Credenciales SIEMPRE en ~/.nabu-config (600). Se reemplazan solo las variables que traen valor.
-guardar_config_home() {
-  local C="$HOME_CONFIG" TMP var pat=""
-  for var in "$@"; do [ -n "${!var}" ] && pat="${pat:+$pat|}$var"; done
+# Los valores que van a ~/.nabu-config se limitan a [A-Za-z0-9_.:/@-] (auditoría R14/H4): ese archivo se
+# carga con `source`, y un valor con $(…), comillas o \ se ejecutaría o rompería el lanzador.
+valor_seguro() { case "$1" in ''|*[!A-Za-z0-9_.:/@-]*) return 1 ;; *) return 0 ;; esac; }
+
+# Escribe pares NOMBRE VALOR en ~/.nabu-config (600). Reemplaza solo esas variables; el resto se conserva.
+escribir_config_home() {
+  local C="$HOME_CONFIG" TMP pat="" i
+  local -a pares=("$@")
+  for ((i = 0; i < ${#pares[@]}; i += 2)); do
+    if ! valor_seguro "${pares[i+1]}"; then
+      echo -e "  ${RED}✗${NC} ${pares[i]} trae caracteres no permitidos (solo letras, números y _ . : / @ -): no se guardó." >&2
+      return 1
+    fi
+    pat="${pat:+$pat|}${pares[i]}"
+  done
   [ -n "$pat" ] || return 0
   TMP=$(umask 077; mktemp "${HOME}/.nabu-config.XXXXXX")
   if [ -f "$C" ]; then
@@ -59,11 +75,89 @@ guardar_config_home() {
     echo "# NABU empleado — credenciales (chmod 600). NO va en el repo ni en el chat." > "$TMP"
   fi
   echo "# actualizado por install.sh $(date '+%Y-%m-%d %H:%M')" >> "$TMP"
-  for var in "$@"; do
-    [ -n "${!var}" ] && printf 'export %s="%s"\n' "$var" "${!var}" >> "$TMP"
+  for ((i = 0; i < ${#pares[@]}; i += 2)); do
+    printf 'export %s=%q\n' "${pares[i]}" "${pares[i+1]}" >> "$TMP"
   done
   chmod 600 "$TMP"
   mv "$TMP" "$C"
+}
+
+# Credenciales SIEMPRE en ~/.nabu-config (600). Se escriben solo las variables (por nombre) que traen valor.
+guardar_config_home() {
+  local var
+  local -a pares=()
+  for var in "$@"; do [ -n "${!var}" ] && pares+=("$var" "${!var}"); done
+  [ ${#pares[@]} -gt 0 ] || return 0
+  escribir_config_home "${pares[@]}"
+}
+
+# R14/H1+H2: hasta el 20-oct las credenciales (INTERNAL_SVC_TOKEN, CLAUDE_CODE_OAUTH_TOKEN, NABU_WAGENT_NAME…) se
+# escribían en el .nabu-config DEL REPO, que está en git. Antes de actualizar: (1) copia 600 del archivo viejo en
+# ~/.nabu-config.repo-viejo.<fecha>; (2) toda variable que falte en ~/.nabu-config pasa allá (sin ejecutar el archivo:
+# se lee línea por línea); (3) se restaura la plantilla para que `git pull` no aborte. No se imprime ningún valor.
+rescatar_config_repo() {
+  local f=".nabu-config" linea var val respaldo rescatadas="" omitidas=""
+  [ -f "$f" ] || return 0
+  git diff --quiet HEAD -- "$f" 2>/dev/null && return 0
+  respaldo="${HOME}/.nabu-config.repo-viejo.$(date +%Y%m%d%H%M%S)"
+  (umask 077; cp "$f" "$respaldo")
+  chmod 600 "$respaldo"
+  while IFS= read -r linea || [ -n "$linea" ]; do
+    [[ "$linea" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
+    var="${BASH_REMATCH[2]}"; val="${BASH_REMATCH[3]}"
+    if [[ "$val" =~ ^\"([^\"]*)\"[[:space:]]*(#.*)?$ ]] || [[ "$val" =~ ^\'([^\']*)\'[[:space:]]*(#.*)?$ ]]; then
+      val="${BASH_REMATCH[1]}"
+    else
+      val="${val%%[[:space:]]#*}"; val="${val%"${val##*[![:space:]]}"}"
+    fi
+    case "$var" in
+      # URL fija (la da la plantilla; las viejas apuntaban a túneles muertos) y credenciales retiradas
+      # (llave del API: rompe la suscripción; Supabase: ya no existe). Quedan solo en el respaldo.
+      NABU_API_URL|ANTHROPIC_API_KEY|SUPABASE_*|PATH|HOME|SHELL|IFS|USER|BASH*|LD_*|DYLD_*|PS[0-9])
+        case " $omitidas " in *" $var "*) ;; *) omitidas="$omitidas $var" ;; esac
+        continue ;;
+    esac
+    [ -n "$val" ] || continue
+    grep -q -E "^(export )?${var}=.+" "$HOME_CONFIG" 2>/dev/null && continue   # ~/.nabu-config ya lo tiene: gana
+    case "$var" in INTERNAL_SVC_TOKEN|CLAUDE_CODE_OAUTH_TOKEN|NABU_WAGENT_NAME) [ -n "${!var}" ] && continue ;; esac
+    if ! valor_seguro "$val"; then omitidas="$omitidas $var(caracteres-no-permitidos)"; continue; fi
+    escribir_config_home "$var" "$val" 2>/dev/null || { omitidas="$omitidas $var"; continue; }
+    case "$var" in INTERNAL_SVC_TOKEN|CLAUDE_CODE_OAUTH_TOKEN|NABU_WAGENT_NAME) printf -v "$var" '%s' "$val" ;; esac
+    rescatadas="$rescatadas $var"
+  done < "$f"
+  git checkout -- "$f"
+  echo -e "  ${GREEN}✓${NC} .nabu-config del repo tenía cambios locales: copia en ${respaldo/#$HOME/~} (600) y plantilla restaurada"
+  [ -n "$rescatadas" ] && echo -e "  ${GREEN}✓${NC} pasadas a ~/.nabu-config:${rescatadas}"
+  [ -n "$omitidas" ] && echo -e "  ${GRAY}  no se pasaron (quedan solo en la copia):${omitidas}${NC}"
+  return 0
+}
+
+# Actualiza el repo sin destruir nada: rescata el .nabu-config viejo y guarda en git stash cualquier otro cambio local.
+actualizar_repo() {
+  rescatar_config_repo
+  if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+    git -c user.name=nabu-install -c user.email=nabu-install@localhost \
+      stash push --quiet -m "nabu-install $(date '+%Y-%m-%d %H:%M')" \
+      && echo -e "  ${YELLOW}⚠${NC} otros cambios locales guardados en 'git stash' (no se borró nada)"
+  fi
+  git pull --quiet origin main 2>/dev/null || git pull origin main
+}
+
+# R14/H3: pedir la clave por la terminal, sin eco, si no vino por entorno ni está en ~/.nabu-config.
+pedir_clave() {
+  local t="" intento
+  ( exec </dev/tty ) 2>/dev/null || return 1
+  echo -e "  La clave de NABU te la da Daniel en privado (por llamada o en persona). Pegá SOLO la clave; no se ve al escribir."
+  for intento in 1 2 3; do
+    IFS= read -r -s -p "  Clave de NABU: " t < /dev/tty || t=""
+    echo
+    if [ ${#t} -ge 40 ] && valor_seguro "$t"; then
+      INTERNAL_SVC_TOKEN="$t"
+      return 0
+    fi
+    echo -e "  ${RED}✗${NC} esa clave no tiene el formato esperado (largo ${#t}; 40+ caracteres, sin espacios). Probá de nuevo."
+  done
+  return 1
 }
 
 clear 2>/dev/null || true
@@ -107,17 +201,7 @@ echo -e "${BOLD}Descargando NABU chat${NC}"
 if [ -d "$TARGET_DIR/.git" ]; then
   echo -e "  ${GRAY}~/nabu-chat ya existe — actualizando${NC}"
   cd "$TARGET_DIR"
-  # Migración: instalaciones viejas guardaban la clave en el .nabu-config del repo (trackeado).
-  # Antes de descartar cambios locales, la rescatamos a ~/.nabu-config si ahí todavía no está.
-  if [ -z "$INTERNAL_SVC_TOKEN" ] && ! grep -q -E '^(export )?INTERNAL_SVC_TOKEN=.+' "$HOME_CONFIG" 2>/dev/null \
-     && grep -q -E '^export INTERNAL_SVC_TOKEN=.+' .nabu-config 2>/dev/null; then
-    INTERNAL_SVC_TOKEN=$(bash -c 'source ./.nabu-config >/dev/null 2>&1; printf %s "$INTERNAL_SVC_TOKEN"')
-    [ -n "$INTERNAL_SVC_TOKEN" ] && guardar_config_home INTERNAL_SVC_TOKEN \
-      && echo -e "  ${GREEN}✓${NC} clave rescatada del .nabu-config viejo → ~/.nabu-config"
-  fi
-  # Descartar cambios locales: el .nabu-config del repo es solo plantilla (las credenciales van en ~/.nabu-config)
-  git checkout -- . 2>/dev/null || true
-  git pull --quiet origin main 2>/dev/null || git pull origin main
+  actualizar_repo
 else
   if [ -d "$TARGET_DIR" ]; then
     echo -e "  ${YELLOW}⚠ ~/nabu-chat existe pero NO es git repo. Movido a ~/nabu-chat.bak${NC}"
@@ -130,6 +214,19 @@ echo -e "  ${GREEN}✓${NC} Descargado a ~/nabu-chat"
 echo
 
 # ─── 3. User config ───────────────────────────────────────────────────────────
+
+# R14/H4: un user.json roto (p. ej. armado a mano con comillas en el nombre) se aparta y se vuelve a generar.
+if [ -f user.json ] && ! jq -e . user.json >/dev/null 2>&1; then
+  mv user.json "user.json.roto.$(date +%s)"
+  echo -e "  ${YELLOW}⚠${NC} user.json estaba dañado: quedó como user.json.roto.* y se vuelve a generar"
+fi
+escribir_user_json() {  # siempre con jq --arg: nombres con comillas, \ o $ quedan como texto
+  jq -n --arg w "$WAGENT" --arg e "$EMAIL" --arg n "$NAME" --arg em "$EMPRESA" --arg r "$ROLE" \
+     --arg t "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+     '{wagent_name:$w, email:$e, display_name:$n, empresa:$em, role:$r, configured_at:$t}' > user.json.nuevo
+  mv user.json.nuevo user.json
+  chmod 600 user.json
+}
 
 if [ -n "$NABU_WAGENT_NAME" ] && ! wagent_valido "$NABU_WAGENT_NAME"; then
   echo -e "${RED}✗ NABU_WAGENT_NAME inválido: solo minúsculas, números y guiones (ej: abby-wagent)${NC}"
@@ -144,17 +241,7 @@ if [ -n "$NABU_USER_EMAIL" ] && [ -n "$NABU_USER_NAME" ] && [ -n "$NABU_USER_EMP
   WAGENT="$NABU_WAGENT_NAME"
   echo -e "${BOLD}Datos del empleado${NC} ${GREEN}(auto-config desde comando)${NC}"
   echo -e "  $NAME · $EMAIL · $EMPRESA · $ROLE · $WAGENT"
-  cat > user.json <<EOF2
-{
-  "wagent_name": "$WAGENT",
-  "email": "$EMAIL",
-  "display_name": "$NAME",
-  "empresa": "$EMPRESA",
-  "role": "$ROLE",
-  "configured_at": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-}
-EOF2
-  chmod 600 user.json
+  escribir_user_json
 elif [ ! -f user.json ]; then
   # Interactivo: se pregunta solo lo que no vino por env vars
   echo -e "${BOLD}Datos del empleado${NC}"
@@ -192,22 +279,12 @@ elif [ ! -f user.json ]; then
     exit 1
   fi
 
-  cat > user.json <<EOF
-{
-  "wagent_name": "$WAGENT",
-  "email": "$EMAIL",
-  "display_name": "$NAME",
-  "empresa": "$EMPRESA",
-  "role": "$ROLE",
-  "configured_at": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-}
-EOF
-  chmod 600 user.json
+  escribir_user_json
   echo
   echo -e "  ${GREEN}✓${NC} user.json creado"
 else
-  EMAIL=$(jq -r .email user.json)
-  NAME=$(jq -r .display_name user.json)
+  EMAIL=$(jq -r '.email // empty' user.json)
+  NAME=$(jq -r '.display_name // empty' user.json)
   WAGENT=$(jq -r '.wagent_name // empty' user.json)
   if [ -n "$NABU_WAGENT_NAME" ] && [ "$NABU_WAGENT_NAME" != "$WAGENT" ]; then
     # Agregar/corregir wagent_name sin tocar el resto de user.json
@@ -226,18 +303,31 @@ echo -e "${BOLD}Credenciales${NC}"
 chmod +x "$TARGET_DIR/nabu" 2>/dev/null || true
 
 NABU_WAGENT_NAME="${WAGENT:-$NABU_WAGENT_NAME}"
+TENIA_CLAVE=0
+grep -q -E '^(export )?INTERNAL_SVC_TOKEN=.+' "$HOME_CONFIG" 2>/dev/null && TENIA_CLAVE=1
+if [ -z "$INTERNAL_SVC_TOKEN" ] && [ "$TENIA_CLAVE" = "0" ]; then
+  pedir_clave || true
+fi
 if [ -n "$INTERNAL_SVC_TOKEN" ]; then
+  if ! valor_seguro "$INTERNAL_SVC_TOKEN" || [ ${#INTERNAL_SVC_TOKEN} -lt 40 ]; then
+    echo -e "  ${RED}✗${NC} INTERNAL_SVC_TOKEN no tiene el formato esperado (40+ caracteres, sin espacios ni comillas)."
+    exit 1
+  fi
   NABU_API_URL="${NABU_API_URL:-https://api.calderon.coffee}"
   guardar_config_home NABU_API_URL INTERNAL_SVC_TOKEN NABU_WAGENT_NAME CLAUDE_CODE_OAUTH_TOKEN
   echo -e "  ${GREEN}✓${NC} ~/.nabu-config (chmod 600): INTERNAL_SVC_TOKEN, NABU_API_URL, NABU_WAGENT_NAME${CLAUDE_CODE_OAUTH_TOKEN:+, CLAUDE_CODE_OAUTH_TOKEN}"
 else
   guardar_config_home NABU_WAGENT_NAME CLAUDE_CODE_OAUTH_TOKEN
-  if ! grep -q -E '^(export )?INTERNAL_SVC_TOKEN=.+' "$HOME_CONFIG" 2>/dev/null; then
-    echo -e "  ${YELLOW}⚠${NC} Falta INTERNAL_SVC_TOKEN en ~/.nabu-config"
-    echo -e "  ${GRAY}  Pedíselo a Daniel en privado y volvé a correr con INTERNAL_SVC_TOKEN=... (no lo pegues en el chat)${NC}"
-  else
+  if [ "$TENIA_CLAVE" = "1" ]; then
     echo -e "  ${GREEN}✓${NC} ~/.nabu-config ya tiene INTERNAL_SVC_TOKEN"
+  else
+    echo -e "  ${YELLOW}⚠${NC} Falta INTERNAL_SVC_TOKEN en ~/.nabu-config"
+    echo -e "  ${GRAY}  Volvé a correr install.sh en una ventana de Terminal: te la pide sin mostrarla. No la pegues en el chat.${NC}"
   fi
+fi
+if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && ! grep -q -E '^(export )?CLAUDE_CODE_OAUTH_TOKEN=.+' "$HOME_CONFIG" 2>/dev/null \
+   && ! claude auth status 2>/dev/null | grep -q '"loggedIn": true'; then
+  echo -e "  ${YELLOW}⚠${NC} No hay credencial de Claude (ni CLAUDE_CODE_OAUTH_TOKEN ni login): pedísela a Daniel, sin ella ./nabu no abre"
 fi
 echo
 
@@ -245,7 +335,7 @@ echo
 # Llega al bus a través del portero → valida clave + wagent_name + bus. SOLO 200 es OK.
 
 echo -e "${BOLD}Probando conexión con NABU${NC}"
-[ -f .nabu-config ] && source .nabu-config
+[ -f .nabu-config ] && source ./.nabu-config
 [ -f "$HOME_CONFIG" ] && source "$HOME_CONFIG"
 WAGENT="${WAGENT:-$NABU_WAGENT_NAME}"
 NABU_API_URL="${NABU_API_URL:-https://api.calderon.coffee}"
@@ -286,10 +376,9 @@ echo -e "${GRAY} como tu asistente NABU. Usá siempre ~/nabu-chat/nabu, no 'clau
 echo
 echo -e "${GRAY}Conversá natural en español. Probá:${NC}"
 echo -e "${GRAY}  • \"necesito una cotización Vencor para X cliente\"${NC}"
-echo -e "${GRAY}  • \"qué agentes hay activos\"${NC}"
-echo -e "${GRAY}  • \"preguntale a fel-agent cuántas facturas hoy\"${NC}"
+echo -e "${GRAY}  • \"¿tengo algo pendiente?\"${NC}"
 echo -e "${GRAY}  • \"necesito vacaciones próxima semana\"${NC}"
 echo
-echo -e "${GRAY}Para actualizar más adelante: cd ~/nabu-chat && git pull${NC}"
+echo -e "${GRAY}Para actualizar más adelante: volvé a correr este mismo instalador (no hagas git pull a mano).${NC}"
 echo
 [ "$CONEXION_OK" = "1" ] || exit 1

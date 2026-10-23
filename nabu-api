@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# nabu-api — llama al bus de NABU con la clave de ~/.nabu-config SIN ponerla en la línea de comandos
+# (la cabecera Authorization va por un descriptor de archivo con `curl -K`, no queda visible en `ps`).
+#
+# Uso (desde ~/nabu-chat):
+#   ./nabu-api GET  /api/handoffs/inbox/<wagent>
+#   ./nabu-api GET  /api/handoffs/<id>
+#   jq -nc --arg a "<wagent>" '{agent:$a, notes:"..."}' | ./nabu-api POST /api/handoffs/<id>/ack -
+#   jq -nc --arg t "$TEXTO" --arg a "<wagent>" '{text:$t, actor:$a}' | ./nabu-api POST /api/handoffs -
+#
+# El cuerpo JSON va por stdin con «-» (así tampoco queda en `ps`). Imprime la respuesta; si el HTTP no es 2xx,
+# avisa el código por stderr y sale con 1. Nunca imprime la clave.
+set -eo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+set -a
+[ -f "$DIR/.nabu-config" ] && . "$DIR/.nabu-config"
+[ -f "$HOME/.nabu-config" ] && . "$HOME/.nabu-config"
+set +a
+
+METODO="${1:-}"; RUTA="${2:-}"; CUERPO="${3:-}"
+case "$METODO" in GET|POST) ;; *) echo "uso: ./nabu-api GET|POST /api/... [-]" >&2; exit 2 ;; esac
+case "$RUTA" in /api/*) ;; *) echo "la ruta debe empezar con /api/" >&2; exit 2 ;; esac
+if [ -z "${INTERNAL_SVC_TOKEN:-}" ]; then
+  echo "falta INTERNAL_SVC_TOKEN en ~/.nabu-config — corré install.sh en la Terminal (la pide sin mostrarla)" >&2
+  exit 2
+fi
+
+SALIDA=$(mktemp)
+trap 'rm -f "$SALIDA"' EXIT
+ARGS=(-sS -m 60 -X "$METODO" -o "$SALIDA" -w '%{http_code}')
+if [ "$CUERPO" = "-" ]; then
+  ARGS+=(-H 'Content-Type: application/json' --data-binary @-)
+elif [ -n "$CUERPO" ]; then
+  echo "el cuerpo va por stdin: ... | ./nabu-api $METODO $RUTA -" >&2
+  exit 2
+fi
+CODIGO=$(curl -K <(printf 'header = "Authorization: Bearer %s"\n' "$INTERNAL_SVC_TOKEN") "${ARGS[@]}" \
+  "${NABU_API_URL:-https://api.calderon.coffee}${RUTA}") || CODIGO="${CODIGO:-000}"
+cat "$SALIDA"
+[ -s "$SALIDA" ] && [ "$(tail -c1 "$SALIDA" | od -An -c | tr -d ' ')" != '\n' ] && echo
+case "$CODIGO" in
+  2*) exit 0 ;;
+  *) echo "HTTP $CODIGO (401/403 = clave mala o ruta no permitida · 404 = no existe · 000/5xx = túnel o bus caído)" >&2; exit 1 ;;
+esac
