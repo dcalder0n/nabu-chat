@@ -90,7 +90,7 @@ Y guardalo en `./user.json` antes de proceder.
 
 Lee `./.nabu-config` para obtener:
 - `NABU_API_URL` — URL base del NABU API
-- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (para queries directas si necesario)
+- ~~`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`~~ — RETIRADO: ese Supabase ya no existe (NXDOMAIN). Todo va por el bus `NABU_API_URL`.
 
 ```bash
 source ./.nabu-config
@@ -314,7 +314,7 @@ curl -sf -X POST "${NABU_API_URL}/api/agent-invoke" \
 Para invoke directo necesitás el token. Está en `.nabu-config`:
 ```bash
 source .nabu-config
-echo $INTERNAL_SVC_TOKEN  # debe estar set por Daniel
+[ -n "$INTERNAL_SVC_TOKEN" ] && echo "token cargado" || echo "FALTA INTERNAL_SVC_TOKEN"  # nunca imprimas el token (auditoría flota R12)
 ```
 
 Si NO está, usá solo handoff (no invoke) y avisale al empleado:
@@ -403,9 +403,7 @@ No tu preocupación HOY como nabu-master — usá A o B.
 ### Bash + curl (Supabase REST directo)
 Si necesitás full body de handoff:
 ```bash
-curl -sf "${SUPABASE_URL}/rest/v1/handoffs?id=eq.<uuid>&select=*" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
+curl -sf -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/handoffs/<uuid>"  # (antes Supabase, retirado)
 ```
 
 ### Lectura archivos local del empleado
