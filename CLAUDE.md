@@ -351,8 +351,10 @@ while true; do
     break
   fi
   
-  STATUS=$(curl -sf -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/handoffs?fromAgent=<wagent_name>&limit=20" | \
-    jq -r --arg id "$HANDOFF_ID" '.handoffs[] | select(.id == $id) | .routingStatus')
+  # 23-oct (auditoría flota R8): desde la laptop la LISTA del bus ya no trae datos (era de todas las empresas). Se consulta
+  # el handoff propio por id, que sí devuelve su estado.
+  STATUS=$(curl -sf -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/handoffs/${HANDOFF_ID}" | \
+    jq -r '(.handoff // .).routingStatus')
   
   if [ "$STATUS" = "complete" ] || [ "$STATUS" = "failed" ]; then
     break
@@ -361,10 +363,9 @@ while true; do
   sleep 10
 done
 
-# 3. Buscar respuesta del agent recipient (handoff que él te mandó back)
-# Filter: toAgents=[nabu-master] AND fromAgent=<recipient> AND created_after START
-curl -sf -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/handoffs?fromAgent=<recipient>&limit=5" | \
-  jq -r '.handoffs[] | select(.subject | contains("RESPUESTA"))' | head -1
+# 3. Buscar la respuesta: llega a TU bandeja (la única que se ve desde la laptop)
+curl -sf -H "Authorization: Bearer ${INTERNAL_SVC_TOKEN}" "${NABU_API_URL}/api/handoffs/inbox/<wagent_name>" | \
+  jq -r '.inbox[] | select(.subject | contains("RESPUESTA"))' | head -1
 ```
 
 ### Cuándo usar B vs A
