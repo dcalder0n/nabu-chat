@@ -93,7 +93,7 @@ rescatar_config_repo() {
   [ -f "$f" ] || return 0
   git diff --quiet HEAD -- "$f" 2>/dev/null && return 0
   respaldo="${HOME}/.nabu-config.repo-viejo.$(date +%Y%m%d%H%M%S)"
-  (umask 077; cp "$f" "$respaldo")
+  (umask 077; grep -v -E '^[[:space:]]*(export[[:space:]]+)?(ANTHROPIC_API_KEY|SUPABASE_[A-Za-z0-9_]*)=' "$f" > "$respaldo" || true)
   chmod 600 "$respaldo"
   while IFS= read -r linea || [ -n "$linea" ]; do
     [[ "$linea" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
@@ -104,11 +104,11 @@ rescatar_config_repo() {
       val="${val%%[[:space:]]#*}"; val="${val%"${val##*[![:space:]]}"}"
     fi
     case "$var" in
-      # URL fija (la da la plantilla; las viejas apuntaban a túneles muertos) y credenciales retiradas
-      # (llave del API: rompe la suscripción; Supabase: ya no existe). Quedan solo en el respaldo.
-      NABU_API_URL|ANTHROPIC_API_KEY|SUPABASE_*|PATH|HOME|SHELL|IFS|USER|BASH*|LD_*|DYLD_*|PS[0-9])
-        case " $omitidas " in *" $var "*) ;; *) omitidas="$omitidas $var" ;; esac
-        continue ;;
+      # R16/B-H7: lista PERMITIDA. Lo demás (URL vieja, llave del API, Supabase, PATH, tokens ajenos) no se pasa;
+      # queda solo en el respaldo (sin las claves retiradas).
+      INTERNAL_SVC_TOKEN|CLAUDE_CODE_OAUTH_TOKEN|NABU_WAGENT_NAME) ;;
+      *) case " $omitidas " in *" $var "*) ;; *) omitidas="$omitidas $var" ;; esac
+         continue ;;
     esac
     [ -n "$val" ] || continue
     grep -q -E "^(export )?${var}=.+" "$HOME_CONFIG" 2>/dev/null && continue   # ~/.nabu-config ya lo tiene: gana

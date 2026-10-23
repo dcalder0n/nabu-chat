@@ -252,7 +252,7 @@ B) ACCIÓN PEDIDA
 ═══════════════════════════════════════════════════════════════════════════════
 <qué necesita hacer el agente destinatario>
 
-— $W (acting on behalf of <email>)
+— $W
 EOF
 )
 jq -nc --arg t "$HANDOFF_TEXT" --arg a "$W" '{text:$t, actor:$a}' | ./nabu-api POST /api/handoffs - | tee /tmp/nabu-ultimo-handoff.json | jq '{ok, handoffId, routingStatus}'
