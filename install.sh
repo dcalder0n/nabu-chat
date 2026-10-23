@@ -293,6 +293,20 @@ else
     WAGENT="$NABU_WAGENT_NAME"
     echo -e "  ${GREEN}✓${NC} user.json: wagent_name = $WAGENT"
   fi
+  # R15/B-H3: laptops instaladas antes del 20-oct tienen user.json SIN wagent_name → preguntarlo acá.
+  INTENTOS=0
+  while ! wagent_valido "$WAGENT" && [ "$INTENTOS" -lt 3 ]; do
+    INTENTOS=$((INTENTOS + 1))
+    preguntar "  Nombre de tu agente (ej: abby-wagent; te lo da Daniel): " WAGENT
+  done
+  if wagent_valido "$WAGENT" && [ "$WAGENT" != "$(jq -r '.wagent_name // empty' user.json)" ]; then
+    jq --arg w "$WAGENT" '.wagent_name = $w' user.json > user.json.nuevo && mv user.json.nuevo user.json
+    chmod 600 user.json
+    echo -e "  ${GREEN}✓${NC} user.json: wagent_name = $WAGENT"
+  elif ! wagent_valido "$WAGENT"; then
+    echo -e "  ${RED}✗${NC} Falta el nombre del agente. Volvé a correr: NABU_WAGENT_NAME=<nombre>-wagent bash install.sh"
+    exit 1
+  fi
   echo -e "${GRAY}user.json ya existe — usando datos de $NAME ($EMAIL, agente: ${WAGENT:-<falta>})${NC}"
 fi
 echo
