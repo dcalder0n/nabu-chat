@@ -301,6 +301,12 @@ else
 fi
 cd "$TARGET_DIR"
 echo -e "   ${GREEN}✓${NC} Repo en ~/nabu-chat"
+# Comando «nabu» en la terminal: los empleados escriben nabu, no ~/nabu-chat/nabu (sin esto: command not found).
+for rc in "$HOME/.zshrc" "$HOME/.bash_profile"; do
+  grep -q '# nabu-chat: comando nabu' "$rc" 2>/dev/null \
+    || printf '\n# nabu-chat: comando nabu\nalias nabu="$HOME/nabu-chat/nabu"\n' >> "$rc"
+done
+echo -e "   ${GREEN}✓${NC} Comando nabu listo (en una terminal nueva)"
 echo
 
 # ─── 5. user.json ────────────────────────────────────────────────────────────
@@ -373,7 +379,7 @@ echo -e "${BOLD}${GREEN}══════════════════�
 echo
 echo -e "${BOLD}Próximo paso:${NC} abrí chat con NABU"
 echo
-echo -e "   ${CYAN}~/nabu-chat/nabu${NC}"
+echo -e "   ${CYAN}nabu${NC}   ${GRAY}(en una terminal nueva)${NC}"
 echo
 echo -e "Después escribí dentro del chat (NO en zsh):"
 echo -e "   ${GRAY}\"Hola, soy ${NABU_USER_NAME%%[[:space:]]*}. ¿Qué tengo pendiente?\"${NC}"

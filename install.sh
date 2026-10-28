@@ -211,6 +211,12 @@ else
 fi
 cd "$TARGET_DIR"
 echo -e "  ${GREEN}✓${NC} Descargado a ~/nabu-chat"
+# Comando «nabu» en la terminal: los empleados escriben nabu, no ~/nabu-chat/nabu (sin esto: command not found).
+for rc in "$HOME/.zshrc" "$HOME/.bash_profile"; do
+  grep -q '# nabu-chat: comando nabu' "$rc" 2>/dev/null \
+    || printf '\n# nabu-chat: comando nabu\nalias nabu="$HOME/nabu-chat/nabu"\n' >> "$rc"
+done
+echo -e "  ${GREEN}✓${NC} Comando nabu listo (en una terminal nueva)"
 echo
 
 # ─── 3. User config ───────────────────────────────────────────────────────────
@@ -383,10 +389,10 @@ fi
 echo
 echo -e "${BOLD}Para arrancar conversación con tu asistente NABU:${NC}"
 echo
-echo -e "  ${BOLD}~/nabu-chat/nabu${NC}"
+echo -e "  ${BOLD}nabu${NC}   ${GRAY}(en una terminal nueva)${NC}"
 echo
-echo -e "${GRAY}(El wrapper ./nabu carga las credenciales auto + arranca Claude Code${NC}"
-echo -e "${GRAY} como tu asistente NABU. Usá siempre ~/nabu-chat/nabu, no 'claude' a secas.)${NC}"
+echo -e "${GRAY}(El comando nabu carga las credenciales auto + arranca Claude Code${NC}"
+echo -e "${GRAY} como tu asistente NABU. Usá siempre nabu, no 'claude' a secas.)${NC}"
 echo
 echo -e "${GRAY}Conversá natural en español. Probá:${NC}"
 echo -e "${GRAY}  • \"necesito una cotización Vencor para X cliente\"${NC}"
